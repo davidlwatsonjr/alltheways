@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy, Delete, Hand, Keyboard, RotateCcw, Settings2, Shuffle, Star, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import { BrailleCell, SymbolVisual } from './components/SymbolVisual';
-import { brailleFor, courseById, courses, translateText, type CourseId, type Group, type SymbolCard } from './data/courses';
+import { brailleFor, courseById, courses, translateText, type CourseId, type Group } from './data/courses';
 import { calculateMetrics, cardsFor, decodeBraille, decodeMorse, generateQuestions, matchesAnswer, type Attempt, type Question, type TestDirection, type TestLength, type TestUnit } from './lib/practice';
 import { playMorse, stopMorse } from './lib/audio';
 import { addSession, initialPreferences, rateCard, readPreferences, storageKey } from './lib/storage';
