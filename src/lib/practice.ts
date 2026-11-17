@@ -107,7 +107,7 @@ export function cardsFor(courseId: CourseId, text: string): SymbolCard[] {
 
 export function generateQuestions(courseId: CourseId, unit: TestUnit, direction: TestDirection, amount = 120, random: () => number = Math.random): Question[] {
   const values = unit === 'letter'
-    ? courseById[courseId].cards.filter(c => c.group === 'letters').map(c => c.label)
+    ? courseById[courseId].cards.filter(c => c.group === 'letters' && (courseId !== 'asl' || !c.motion)).map(c => c.label)
     : wordBank;
   if (values.length < 4) return [];
   const result: Question[] = [];
