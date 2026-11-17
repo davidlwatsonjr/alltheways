@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy, Delete, Hand, Keyboard, RotateCcw, Settings2, Shuffle, Star, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import { BrailleCell, SymbolVisual } from './components/SymbolVisual';
-import { brailleFor, courseById, courses, translateText, type CourseId, type Group } from './data/courses';
+import { brailleFor, courseById, courses, translateText, unicodeBraille, type CourseId, type Group } from './data/courses';
 import { calculateMetrics, cardsFor, decodeBraille, decodeMorse, generateQuestions, matchesAnswer, shuffle, type Attempt, type Question, type TestDirection, type TestLength, type TestUnit } from './lib/practice';
 import { playMorse, stopMorse } from './lib/audio';
 import { addSession, initialPreferences, rateCard, readPreferences, storageKey } from './lib/storage';
@@ -44,6 +44,7 @@ function App() {
   const [remaining, setRemaining] = useState(60);
   const [input, setInput] = useState('HELLO WORLD');
   const [typeReverse, setTypeReverse] = useState(false);
+  const [brailleDots, setBrailleDots] = useState<number[]>([]);
   const [copied, setCopied] = useState(false);
   const [settings, setSettings] = useState(false);
   const beganAt = useRef(0);
@@ -105,7 +106,7 @@ function App() {
     if (courseId === prefs.course) return;
     resetTest(); setPrefs(p => ({...p, course: courseId}));
     setFilter('letters'); setDeckIndex(0); setRevealed(false);
-    setInput('HELLO WORLD'); setTypeReverse(false);
+    setInput('HELLO WORLD'); setTypeReverse(false); setBrailleDots([]);
   }
   function switchMode(next: Mode) {
     if (mode === 'test' && next !== 'test') resetTest();
@@ -128,7 +129,7 @@ function App() {
     setQuestions(generated); setQuestionIndex(0); setAnswer(null); setTypedAnswer('');
     setAttempts([]); beganAt.current = Date.now(); questionAt.current = Date.now();
     saveCompleted.current = false; endedAt.current = 0; setRemaining(length === '10' ? 0 : Number(length)); setPhase('running');
-    if (course.id === 'morse' && prefs.audioEnabled && direction === 'decode' && generated[0]) void playMorse(generated[0].answer);
+    if (course.id === 'morse' && prefs.audioEnabled && generated[0]) void playMorse(generated[0].answer);
   }
   function submitAnswer(choice: string) {
     if (!active || answer !== null || phase !== 'running') return;
@@ -148,7 +149,7 @@ function App() {
     const next = questions[questionIndex + 1];
     setQuestionIndex(v => v + 1); setAnswer(null); setTypedAnswer('');
     questionAt.current = Date.now();
-    if (course.id === 'morse' && prefs.audioEnabled && direction === 'decode') void playMorse(next.answer);
+    if (course.id === 'morse' && prefs.audioEnabled) void playMorse(next.answer);
   }
   function updateAudio() {
     setPrefs(p => ({...p, audioEnabled: !p.audioEnabled}));
@@ -238,7 +239,7 @@ function App() {
             ? (unit === 'letter' ? <SymbolVisual key={active.answer} course={course.id} card={cardsFor(course.id,active.answer)[0]}/> : <SymbolSequence course={course.id} text={active.answer}/>)
             : <span className="large-character word">{active.answer}</span>}
           </div>
-          {course.id === 'morse' && prefs.audioEnabled && direction === 'decode' && <button className="replay" onClick={() => void playMorse(active.answer)}><Volume2 size={16}/> Replay</button>}
+          {course.id === 'morse' && prefs.audioEnabled && <button className="replay" onClick={() => void playMorse(active.answer)}><Volume2 size={16}/> Replay</button>}
         </div>
         {unit === 'word' && direction === 'decode' ? <form className="word-entry" onSubmit={e => {e.preventDefault(); submitAnswer(typedAnswer);}}>
           <input aria-label="Type the word" placeholder="Type the word…" autoCapitalize="characters" autoComplete="off" spellCheck={false} disabled={answer !== null} value={typedAnswer} onChange={e => setTypedAnswer(e.target.value.toUpperCase().replace(/[^A-Z]/g,''))} maxLength={12}/>
@@ -264,11 +265,20 @@ function App() {
 
       {mode === 'type' && <>
         <div className="type-toolbar">
-          {course.id !== 'asl' ? <div className="segmented"><button className={!typeReverse ? 'active' : ''} onClick={() => {setTypeReverse(false);setInput('HELLO WORLD');}}>Encode</button><button className={typeReverse ? 'active' : ''} onClick={() => {setTypeReverse(true);setInput('');}}>Decode</button></div> : <span className="subtle">Finger-spell any message</span>}
+          {course.id !== 'asl' ? <div className="segmented"><button className={!typeReverse ? 'active' : ''} onClick={() => {setTypeReverse(false);setInput('HELLO WORLD');setBrailleDots([]);}}>Encode</button><button className={typeReverse ? 'active' : ''} onClick={() => {setTypeReverse(true);setInput('');setBrailleDots([]);}}>Decode</button></div> : <span className="subtle">Finger-spell any message</span>}
           <button className="small-tool" onClick={() => setInput('')}>Clear <X size={15}/></button>
         </div>
         <label className="type-label" htmlFor="free-input">{typeReverse ? course.id === 'morse' ? 'Morse input (spaces between letters, / between words)' : 'Paste Braille Unicode cells' : 'Your text'}</label>
         <textarea id="free-input" rows={2} value={input} onChange={e => setInput(e.target.value.slice(0,120))} maxLength={120} placeholder={typeReverse ? course.id === 'morse' ? '.... . .-.. .-.. ---' : '⠓⠑⠇⠇⠕' : 'Type anything…'} spellCheck={false}/>
+        {typeReverse && course.id === 'braille' && <div className="braille-keypad" aria-label="Braille cell input">
+          {[1,4,2,5,3,6].map(dot => <button key={dot} aria-pressed={brailleDots.includes(dot)}
+            onClick={() => setBrailleDots(p => p.includes(dot) ? p.filter(v => v !== dot) : [...p,dot])}>
+            {dot}
+          </button>)}
+          <button disabled={!brailleDots.length} onClick={() => {setInput(v => v + unicodeBraille(brailleDots));setBrailleDots([]);}}>Add cell</button>
+          <button onClick={() => setInput(v => v + ' ')}>Space</button>
+          <button aria-label="Backspace" onClick={() => setInput(v => v.slice(0,-1))}><Delete size={16}/></button>
+        </div>}
         {typeReverse && course.id === 'morse' && <div className="morse-keypad">
           <button onClick={() => setInput(v => v + '.')}>· Dit</button><button onClick={() => setInput(v => v + '-')}>− Dah</button>
           <button onClick={() => setInput(v => v + ' ')}>Next letter</button><button onClick={() => setInput(v => v.trimEnd() + ' / ')}>Space</button>
