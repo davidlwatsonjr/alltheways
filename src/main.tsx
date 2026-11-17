@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy, Delete, Hand, Keyboard, RotateCcw, Settings2, Shuffle, Star, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import { BrailleCell, SymbolVisual } from './components/SymbolVisual';
 import { brailleFor, courseById, courses, translateText, type CourseId, type Group } from './data/courses';
-import { calculateMetrics, cardsFor, decodeBraille, decodeMorse, generateQuestions, matchesAnswer, type Attempt, type Question, type TestDirection, type TestLength, type TestUnit } from './lib/practice';
+import { calculateMetrics, cardsFor, decodeBraille, decodeMorse, generateQuestions, matchesAnswer, shuffle, type Attempt, type Question, type TestDirection, type TestLength, type TestUnit } from './lib/practice';
 import { playMorse, stopMorse } from './lib/audio';
 import { addSession, initialPreferences, rateCard, readPreferences, storageKey } from './lib/storage';
 import './style.css';
@@ -47,6 +47,7 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [settings, setSettings] = useState(false);
   const beganAt = useRef(0);
+  const endedAt = useRef(0);
   const questionAt = useRef(0);
   const saveCompleted = useRef(false);
   const course = courseById[prefs.course];
@@ -59,12 +60,12 @@ function App() {
       if (filter === 'review') return (prefs.progress[card.id]?.seen ?? 0) > 0 && !prefs.progress[card.id]?.mastered;
       return filter === 'all' || card.group === filter;
     });
-    return randomDeck ? [...subset].sort((a,b) => a.label.localeCompare(b.label)).reverse() : subset;
-  }, [cards, filter, prefs.starred, prefs.progress, randomDeck]);
+    return randomDeck ? shuffle(subset) : subset;
+  }, [cards, filter, prefs.starred, filter === 'review' ? prefs.progress : null, randomDeck]);
   const current = deck.length ? deck[((deckIndex % deck.length) + deck.length) % deck.length] : undefined;
   const pastSessions = prefs.sessions.filter(s => s.course === course.id);
   const latest = pastSessions[pastSessions.length - 1];
-  const duration = length === '10' ? (Date.now() - beganAt.current) / 1000 : Number(length);
+  const duration = Math.max(1, (endedAt.current || Date.now() - (beganAt.current ? 0 : Date.now()) - beganAt.current) / 1000);
   const metrics = calculateMetrics(attempts, duration);
   const testCorrect = active && answer !== null && matchesAnswer(answer, active.answer);
   const output = typeReverse ? (course.id === 'morse' ? decodeMorse(input) : decodeBraille(input)) : translateText(course.id, input);
@@ -78,7 +79,7 @@ function App() {
     const timer = window.setInterval(() => {
       const left = Math.max(0, Math.ceil((beganAt.current + Number(length) * 1000 - Date.now()) / 1000));
       setRemaining(left);
-      if (left === 0) setPhase('finished');
+      if (left === 0) finishTest();
     }, 250);
     return () => window.clearInterval(timer);
   }, [phase, length]);
@@ -88,16 +89,17 @@ function App() {
     saveCompleted.current = true;
     stopMorse();
     if (attempts.length) {
-      const result = calculateMetrics(attempts, length === '10' ? Math.max(1, (Date.now() - beganAt.current) / 1000) : Number(length) - remaining);
+      const result = calculateMetrics(attempts, Math.max(1, (endedAt.current - beganAt.current) / 1000));
       setPrefs(p => ({...p, sessions: addSession(p.sessions, {
         id: Date.now(), course: p.course, unit, direction, length, metrics: result
       })}));
     }
   }, [phase, attempts, length, remaining, unit, direction]);
 
+  function finishTest() { if (endedAt.current) return; endedAt.current = Date.now(); setPhase('finished'); }
   function resetTest() {
     stopMorse(); setPhase('ready'); setQuestions([]); setAnswer(null); setTypedAnswer('');
-    setAttempts([]); setQuestionIndex(0); beganAt.current = 0;
+    setAttempts([]); setQuestionIndex(0); beganAt.current = 0; endedAt.current = 0;
   }
   function switchCourse(courseId: CourseId) {
     if (courseId === prefs.course) return;
@@ -125,7 +127,7 @@ function App() {
     const generated = generateQuestions(course.id, unit, direction, length === '10' ? 10 : 120);
     setQuestions(generated); setQuestionIndex(0); setAnswer(null); setTypedAnswer('');
     setAttempts([]); beganAt.current = Date.now(); questionAt.current = Date.now();
-    saveCompleted.current = false; setRemaining(length === '10' ? 0 : Number(length)); setPhase('running');
+    saveCompleted.current = false; endedAt.current = 0; setRemaining(length === '10' ? 0 : Number(length)); setPhase('running');
     if (course.id === 'morse' && prefs.audioEnabled && direction === 'decode' && generated[0]) void playMorse(generated[0].answer);
   }
   function submitAnswer(choice: string) {
@@ -142,7 +144,7 @@ function App() {
     stopMorse();
   }
   function nextQuestion() {
-    if (questionIndex + 1 === questions.length) { setPhase('finished'); return; }
+    if (questionIndex + 1 === questions.length) { finishTest(); return; }
     const next = questions[questionIndex + 1];
     setQuestionIndex(v => v + 1); setAnswer(null); setTypedAnswer('');
     questionAt.current = Date.now();
@@ -166,7 +168,7 @@ function App() {
   }
   useEffect(() => {
     if (course.id !== 'morse' || !prefs.audioEnabled || mode !== 'study' || !current) return;
-    if (reverse !== revealed) void playMorse(current.label);
+    if (reverse === revealed) void playMorse(current.label);
     return () => stopMorse();
   }, [course.id, current?.id, mode, prefs.audioEnabled, revealed, reverse]);
 
@@ -248,8 +250,8 @@ function App() {
           </button>)}
         </div>}
         <div className="test-bottom">
-          {answer !== null ? <><span aria-live="polite" className={testCorrect ? 'feedback right' : 'feedback wrong'}>{testCorrect ? 'Correct!' : `Answer: ${active.answer}`}</span><button className="primary-action" onClick={() => {if (length === '10' && questionIndex + 1 >= 10) setPhase('finished'); else nextQuestion();}}>Next <ArrowRight size={17}/></button></>
-            : <><span className="subtle">First answer counts toward your grade.</span><button className="text-action" onClick={() => setPhase('finished')}>End test</button></>}
+          {answer !== null ? <><span aria-live="polite" className={testCorrect ? 'feedback right' : 'feedback wrong'}>{testCorrect ? 'Correct!' : `Answer: ${active.answer}`}</span><button className="primary-action" onClick={() => {if (length === '10' && questionIndex + 1 >= 10) finishTest(); else nextQuestion();}}>Next <ArrowRight size={17}/></button></>
+            : <><span className="subtle">First answer counts toward your grade.</span><button className="text-action" onClick={finishTest}>End test</button></>}
         </div>
       </>}
 
