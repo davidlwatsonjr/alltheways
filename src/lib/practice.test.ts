@@ -15,6 +15,9 @@ describe('testing engine', () => {
       }
     }
   });
+  it('excludes ASL letters that require motion from static tests', () => {
+    expect(generateQuestions('asl','letter','decode',60).every(q => !['J','Z'].includes(q.answer))).toBe(true);
+  });
   it('keeps word prompts compatible with ASL fingerspelling references', () => {
     expect(wordBank.every(w => !/[JZ]/.test(w) && /^[A-Z]{3,5}$/.test(w))).toBe(true);
   });
