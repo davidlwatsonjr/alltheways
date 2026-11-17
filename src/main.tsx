@@ -65,7 +65,7 @@ function App() {
   const current = deck.length ? deck[((deckIndex % deck.length) + deck.length) % deck.length] : undefined;
   const pastSessions = prefs.sessions.filter(s => s.course === course.id);
   const latest = pastSessions[pastSessions.length - 1];
-  const duration = Math.max(1, (endedAt.current || Date.now() - (beganAt.current ? 0 : Date.now()) - beganAt.current) / 1000);
+  const duration = Math.max(1, ((endedAt.current || Date.now()) - beganAt.current) / 1000);
   const metrics = calculateMetrics(attempts, duration);
   const testCorrect = active && answer !== null && matchesAnswer(answer, active.answer);
   const output = typeReverse ? (course.id === 'morse' ? decodeMorse(input) : decodeBraille(input)) : translateText(course.id, input);
