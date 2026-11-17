@@ -1,33 +1,43 @@
-/** International Morse timing: dit = one unit, dah = three, element gap = one,
- * character gap = three, word gap = seven. Playback is synthesized locally. */
+import { morseMap } from '../data/courses';
 let context: AudioContext | undefined;
+const playing = new Set<OscillatorNode>();
+/** Cancel scheduled playback before another prompt or when audio is switched off. */
+export function stopMorse(): void {
+  for (const oscillator of playing) {
+    try { oscillator.stop(); } catch { /* already stopped */ }
+  }
+  playing.clear();
+}
+/** International Morse timing: dit = 1, dah = 3, element gap = 1, letter gap = 3, word gap = 7. */
 export async function playMorse(message: string, wpm = 18): Promise<void> {
-  const AudioContextClass = window.AudioContext;
-  if (!AudioContextClass) return;
-  context ??= new AudioContextClass();
+  stopMorse();
+  if (typeof window === 'undefined' || !window.AudioContext) return;
+  context ??= new window.AudioContext();
   if (context.state === 'suspended') await context.resume();
-  const { morseMap } = await import('../data/courses');
   const unit = 1.2 / wpm;
-  let at = context.currentTime + 0.08;
-  const words = message.toUpperCase().split(' ');
+  let at = context.currentTime + 0.04;
+  const words = message.toUpperCase().trim().split(/\s+/).filter(Boolean);
   words.forEach((word, wordIndex) => {
-    [...word].forEach((character, charIndex) => {
-      const pattern = morseMap[character];
-      if (!pattern) return;
-      [...pattern].forEach((mark, markIndex) => {
+    const chars = [...word].filter(ch => morseMap[ch]);
+    chars.forEach((char, charIndex) => {
+      const marks = morseMap[char];
+      [...marks].forEach((mark, markIndex) => {
         const duration = mark === '-' ? 3 * unit : unit;
         const oscillator = context!.createOscillator();
         const gain = context!.createGain();
         oscillator.type = 'sine'; oscillator.frequency.value = 650;
         gain.gain.setValueAtTime(0, at);
-        gain.gain.linearRampToValueAtTime(0.12, at + 0.005);
-        gain.gain.setValueAtTime(0.12, at + duration - 0.005);
+        gain.gain.linearRampToValueAtTime(0.13, at + 0.005);
+        gain.gain.setValueAtTime(0.13, at + Math.max(0.006, duration - 0.005));
         gain.gain.linearRampToValueAtTime(0, at + duration);
         oscillator.connect(gain); gain.connect(context!.destination);
+        oscillator.onended = () => { playing.delete(oscillator); gain.disconnect(); oscillator.disconnect(); };
+        playing.add(oscillator);
         oscillator.start(at); oscillator.stop(at + duration + 0.01);
-        at += duration + (markIndex === pattern.length - 1 ? 0 : unit);
+        at += duration;
+        if (markIndex < marks.length - 1) at += unit;
       });
-      if (charIndex < word.length - 1) at += 3 * unit;
+      if (charIndex < chars.length - 1) at += 3 * unit;
     });
     if (wordIndex < words.length - 1) at += 7 * unit;
   });

@@ -1,30 +1,37 @@
 import type { CourseId } from '../data/courses';
+import type { TestDirection, TestLength, TestUnit, Metrics } from './practice';
 export interface CardProgress { seen: number; correct: number; again: number; last: number; mastered: boolean; }
 export type Progress = Record<string, CardProgress>;
-export interface Preferences { course: CourseId; starred: string[]; progress: Progress; }
+export interface Session {
+  id: number; course: CourseId; unit: TestUnit; direction: TestDirection;
+  length: TestLength; metrics: Metrics;
+}
+export interface Preferences { course: CourseId; starred: string[]; progress: Progress; audioEnabled: boolean; sessions: Session[]; }
 export const storageKey = 'alltheways:state:v1';
-export const initialPreferences: Preferences = { course: 'asl', starred: [], progress: {} };
+export const initialPreferences: Preferences = { course: 'asl', starred: [], progress: {}, audioEnabled: false, sessions: [] };
 export function readPreferences(): Preferences {
-  if (typeof localStorage === 'undefined') return initialPreferences;
+  if (typeof localStorage === 'undefined') return {...initialPreferences};
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
-    if (!parsed || typeof parsed !== 'object') return initialPreferences;
+    if (!parsed || typeof parsed !== 'object') return {...initialPreferences};
     const data = parsed as Partial<Preferences>;
     return {
       course: ['asl','braille','morse'].includes(data.course ?? '') ? data.course! : 'asl',
       starred: Array.isArray(data.starred) ? data.starred.filter(x => typeof x === 'string') : [],
-      progress: data.progress && typeof data.progress === 'object' && !Array.isArray(data.progress) ? data.progress : {}
+      progress: data.progress && typeof data.progress === 'object' && !Array.isArray(data.progress) ? data.progress : {},
+      audioEnabled: data.audioEnabled === true,
+      sessions: Array.isArray(data.sessions) ? data.sessions.filter(s => s && typeof s.id === 'number' && s.metrics).slice(-50) : []
     };
-  } catch { return initialPreferences; }
+  } catch { return {...initialPreferences}; }
 }
 export function rateCard(progress: Progress, id: string, correct: boolean): Progress {
   const prev = progress[id] ?? {seen: 0, correct: 0, again: 0, last: 0, mastered: false};
-  const next = {
-    seen: prev.seen + 1,
-    correct: prev.correct + Number(correct),
-    again: prev.again + Number(!correct),
-    last: Date.now(),
+  return {...progress, [id]: {
+    seen: prev.seen + 1, correct: prev.correct + Number(correct),
+    again: prev.again + Number(!correct), last: Date.now(),
     mastered: correct ? prev.correct + 1 >= 2 : false
-  };
-  return {...progress, [id]: next};
+  }};
+}
+export function addSession(sessions: Session[], session: Session): Session[] {
+  return [...sessions, session].slice(-50);
 }
