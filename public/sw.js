@@ -1,5 +1,5 @@
-const CACHE = 'alltheways-app-v2';
-const LETTERS = 'abcdefghiklmnopqrstuvwxy'.split('');
+const CACHE = 'alltheways-app-v3';
+const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest',
   '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png',

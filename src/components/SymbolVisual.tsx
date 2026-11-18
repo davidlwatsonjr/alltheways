@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Hand, MoveUpRight } from 'lucide-react';
+import { Hand } from 'lucide-react';
 import type { CourseId, SymbolCard } from '../data/courses';
 export function BrailleCell({ dots }: { dots: number[] }) {
   return <span className="braille-cell" aria-hidden="true">{[1,4,2,5,3,6].map(n =>
@@ -15,8 +15,10 @@ export function SymbolVisual({ course, card, compact = false }: { course: Course
       {[...card.code].map((mark,i) => <span key={i} className={mark === '-' ? 'dash' : 'dot'}/>)}</div>
     {!compact && <div className="morse-footer">{card.code.replaceAll('.', '·').replaceAll('-', '−')}</div>}
   </div>;
-  if (card.motion) return <div className={`symbol-visual sign-motion ${compact ? 'compact' : ''}`}>
-    <Hand className="motion-hand" size={compact ? 26 : 68}/>{!compact && <><span className="motion-title"><MoveUpRight size={14}/> Movement sign</span><p>{card.motion}</p></>}
+  // J and Z use the same monochrome SVG style as other fingerspelling letters, with motion paths.
+  if (card.motion) return <div className={`symbol-visual sign-visual ${compact ? 'compact' : ''}`}>
+    {!failed ? <img src={`/asl/${card.label.toLowerCase()}.svg`} alt={`ASL fingerspelling ${card.label}: ${card.motion}`} onError={() => setFailed(true)} />
+      : <div className="sign-fallback"><Hand size={compact ? 24 : 55}/><small>Motion illustration unavailable</small></div>}
   </div>;
   return <div className={`symbol-visual sign-visual ${compact ? 'compact' : ''}`}>
     {!failed ? <img src={`/asl/${card.label.toLowerCase()}.svg`} alt={`ASL fingerspelling handshape for ${card.label}`} onError={() => setFailed(true)} />
