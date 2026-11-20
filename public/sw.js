@@ -1,4 +1,4 @@
-const CACHE = 'alltheways-app-v3';
+const CACHE = 'speakeasy-app-v1';
 const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
 const SHELL = [
   '/', '/index.html', '/manifest.webmanifest',

@@ -7,12 +7,13 @@ export interface Session {
   length: TestLength; metrics: Metrics;
 }
 export interface Preferences { course: CourseId; starred: string[]; progress: Progress; audioEnabled: boolean; sessions: Session[]; }
-export const storageKey = 'alltheways:state:v1';
+export const storageKey = 'speakeasy:state:v1';
+const legacyStorageKey = 'alltheways:state:v1';
 export const initialPreferences: Preferences = { course: 'asl', starred: [], progress: {}, audioEnabled: false, sessions: [] };
 export function readPreferences(): Preferences {
   if (typeof localStorage === 'undefined') return {...initialPreferences};
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(storageKey) ?? 'null');
+    const parsed: unknown = JSON.parse(localStorage.getItem(storageKey) ?? localStorage.getItem(legacyStorageKey) ?? 'null');
     if (!parsed || typeof parsed !== 'object') return {...initialPreferences};
     const data = parsed as Partial<Preferences>;
     return {

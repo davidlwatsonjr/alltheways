@@ -175,7 +175,7 @@ function App() {
 
   return <div className="app">
     <header className="app-header">
-      <div className="identity"><img src="/icons/icon-192.png" alt="" /><div><strong>all the <em>ways</em></strong><small>Learn a new way to communicate</small></div></div>
+      <div className="identity"><img src="/icons/icon-192.png" alt="" /><div><strong>Speak<em>Easy</em></strong><small>Learn a new way to communicate</small></div></div>
       <div className="header-right"><span className="mastered"><Trophy size={15}/> {totalMastered}/{cards.length}</span><button className="icon-button" onClick={() => setSettings(true)} aria-label="Settings"><Settings2 size={19}/></button></div>
     </header>
     <nav className="course-tabs" aria-label="Select language">
