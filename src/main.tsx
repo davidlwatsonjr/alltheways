@@ -1,3 +1,5 @@
+import '@fontsource-variable/dm-sans/wght.css';
+import '@fontsource-variable/outfit/wght.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ArrowLeft, ArrowRight, BookOpen, Check, ChevronDown, Clock3, Copy, Delete, Hand, Keyboard, RotateCcw, Settings2, Shuffle, Star, Trophy, Volume2, VolumeX, X } from 'lucide-react';
@@ -47,6 +49,8 @@ function App() {
   const [brailleDots, setBrailleDots] = useState<number[]>([]);
   const [copied, setCopied] = useState(false);
   const [settings, setSettings] = useState(false);
+  const [offlineStatus, setOfflineStatus] = useState<'preparing' | 'ready' | 'unavailable'>('preparing');
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
   const beganAt = useRef(0);
   const endedAt = useRef(0);
   const questionAt = useRef(0);
@@ -74,6 +78,42 @@ function App() {
 
   useEffect(() => { try { localStorage.setItem(storageKey, JSON.stringify(prefs)); } catch { /* private browsing */ } }, [prefs]);
   useEffect(() => () => stopMorse(), []);
+  useEffect(() => {
+    const updateConnection = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateConnection);
+    window.addEventListener('offline', updateConnection);
+    if (!import.meta.env.PROD || !('serviceWorker' in navigator)) {
+      setOfflineStatus('unavailable');
+      return () => {
+        window.removeEventListener('online', updateConnection);
+        window.removeEventListener('offline', updateConnection);
+      };
+    }
+
+    let mounted = true;
+    const serviceWorker = navigator.serviceWorker;
+    const onControl = () => {
+      if (mounted && serviceWorker.controller) setOfflineStatus('ready');
+    };
+    serviceWorker.addEventListener('controllerchange', onControl);
+    onControl();
+    void serviceWorker.register('/sw.js')
+      .then(() => serviceWorker.ready)
+      .then(registration => {
+        if (mounted && registration.active) setOfflineStatus('ready');
+      })
+      .catch(error => {
+        console.warn('Offline installation failed', error);
+        if (mounted) setOfflineStatus('unavailable');
+      });
+
+    return () => {
+      mounted = false;
+      serviceWorker.removeEventListener('controllerchange', onControl);
+      window.removeEventListener('online', updateConnection);
+      window.removeEventListener('offline', updateConnection);
+    };
+  }, []);
 
   useEffect(() => {
     if (phase !== 'running' || length === '10') return;
@@ -298,7 +338,11 @@ function App() {
         <p className="type-hint">{course.id === 'asl' ? 'ASL is a full language; this mode teaches fingerspelling only. J and Z require movement.' : course.id === 'braille' ? 'Visual six-dot Braille; no tactile feedback, contractions or capitalization marks in encoding.' : 'Morse audio is synthesized locally. Enable Audio above to listen.'}</p>
       </>}
     </main>
-    <footer className="app-footer"><span>Offline-ready · Your progress stays on this device</span>{latest && <span>{pastSessions.length} tests logged</span>}</footer>
+    <footer className="app-footer"><span role="status" aria-live="polite">{
+      offlineStatus === 'ready' ? (isOnline ? 'Saved for offline use' : 'Offline mode · ready')
+      : offlineStatus === 'preparing' ? 'Preparing offline files…'
+      : 'Offline files unavailable · reconnect to install'
+    } · Progress saved on this device</span>{latest && <span>{pastSessions.length} tests logged</span>}</footer>
     {settings && <div className="modal-backdrop" onMouseDown={e => {if(e.target === e.currentTarget) setSettings(false);}}><section className="modal" role="dialog" aria-modal="true" aria-label="Settings"><div className="modal-top"><h2>Settings & progress</h2><button className="icon-button" onClick={() => setSettings(false)} aria-label="Close"><X size={18}/></button></div>
       <p>All learning data is saved locally. No account or backend is required.</p>
       <p><strong>{totalMastered} mastered</strong> in {course.name} · {pastSessions.length} saved tests</p>
@@ -309,4 +353,4 @@ function App() {
   </div>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
-if ('serviceWorker' in navigator && import.meta.env.PROD) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(console.warn));
+

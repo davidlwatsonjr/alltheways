@@ -1,38 +1,70 @@
-const CACHE = 'speakeasy-app-v1';
-const LETTERS = 'abcdefghijklmnopqrstuvwxyz'.split('');
-const SHELL = [
-  '/', '/index.html', '/manifest.webmanifest',
-  '/icons/icon-192.png', '/icons/icon-512.png', '/icons/maskable-512.png',
-  '/icons/apple-touch-icon.png', '/icons/favicon-48.png',
-  ...LETTERS.map(letter => `/asl/${letter}.svg`)
-];
+/* A new, complete cache is populated before the updated service worker activates.
+   These two declarations are replaced with the build's complete local file list. */
+const CACHE_REVISION = 'DEV';
+const PRECACHE_URLS = [];
+const CACHE_PREFIX = 'speakeasy-offline-';
+const CACHE_NAME = CACHE_PREFIX + CACHE_REVISION;
+const FALLBACK_PAGE = '/index.html';
+
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // If even one required file is missing, installation fails and the previous
+    // working service worker remains in control instead of leaving a partial app.
+    await cache.addAll(PRECACHE_URLS);
+    await self.skipWaiting();
+  })());
 });
+
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil((async () => {
+    const names = await caches.keys();
+    await Promise.all(names
+      .filter(name => (name.startsWith(CACHE_PREFIX) || name.startsWith('speakeasy-app-')) && name !== CACHE_NAME)
+      .map(name => caches.delete(name)));
+    await self.clients.claim();
+  })());
 });
+
 self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).then(response => {
-      if (response.ok) {
-        const copy = response.clone();
-        event.waitUntil(caches.open(CACHE).then(cache => cache.put('/index.html', copy)));
+    // Prefer the latest page online, but always render our precached app shell
+    // on airplane mode, including for home-screen standalone launches.
+    event.respondWith((async () => {
+      try {
+        const response = await fetch(request);
+        if (response.ok) {
+          const copy = response.clone();
+          event.waitUntil(caches.open(CACHE_NAME)
+            .then(cache => cache.put(FALLBACK_PAGE, copy)).catch(() => {}));
+        }
+        return response;
+      } catch {
+        return (await caches.match(FALLBACK_PAGE)) ||
+          new Response('SpeakEasy is not cached on this device yet.', {status: 503});
       }
-      return response;
-    }).catch(() => caches.match('/index.html')));
+    })());
     return;
   }
-  event.respondWith(caches.match(request).then(async cached => {
+
+  // All Vite bundles, local fonts, manifest, icons and ASL diagrams are precached.
+  // Same-origin assets loaded later are cached after the first successful fetch.
+  event.respondWith((async () => {
+    const cached = await caches.match(request);
     if (cached) return cached;
     try {
       const response = await fetch(request);
-      if (response.ok) event.waitUntil(caches.open(CACHE).then(cache => cache.put(request, response.clone())));
+      if (response.ok) {
+        const copy = response.clone();
+        event.waitUntil(caches.open(CACHE_NAME)
+          .then(cache => cache.put(request, copy)).catch(() => {}));
+      }
       return response;
     } catch {
       return Response.error();
     }
-  }));
+  })());
 });

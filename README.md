@@ -35,3 +35,16 @@ The PWA manifest and app icons are in `public/`; all assets required to study (i
 GitHub repository name: `speakeasy` (rename from `alltheways` in Settings → General).
 
 The browser treats the old and new subdomains as separate origins. Existing localStorage does not transfer automatically. On the old domain, back up the localStorage value `alltheways:state:v1` before moving the Pages custom domain; import it into the new domain using the browser console if retaining personal progress is important.
+
+## Offline-first verification
+
+SpeakEasy is a static progressive web app. Every feature (Study, Test, Type, local progress, Braille and ASL graphics, and Morse playback) works without internet **after the initial online load has installed its service worker and cached all assets**.
+
+- Fonts (DM Sans and Outfit) are bundled locally from Fontsource, not loaded from Google Fonts.
+- The build enumerates every published file, creates a revision-specific precache, and checks its completeness. A failed cache installation leaves the prior working version active.
+- The footer shows **Saved for offline use** when the browser has an active service worker; only then should you disconnect. For a first-time installation, remain online until it changes from **Preparing offline files…**.
+- To test, launch the app online and wait for that status, switch to airplane mode, completely close it, reopen from your home screen, and exercise all three modes and J/Z diagrams. Your quiz scores and favorites remain on the device.
+- Progress is in localStorage. Private browsing, clearing site data, or changing devices can erase it. The first visit on a new device still requires a connection; GitHub Pages cannot be visited offline before the app is cached.
+- External links and app updates require internet. The application itself makes no requests to third-party services during use.
+
+CI runs unit tests, compiles the app, precaches the complete site, and simulates an offline service-worker launch. A missing file, remote CSS dependency, or offline loading failure fails the production build.
